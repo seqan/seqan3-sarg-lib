@@ -72,8 +72,11 @@ TEST_F(verify_option_config_test, special_identifiers)
     auto parser = get_parser();
     EXPECT_THROW(parser.add_option(option_value, sharg::config{.short_id = 'h'}), sharg::design_error);
     EXPECT_THROW(parser.add_option(option_value, sharg::config{.long_id = "help"}), sharg::design_error);
+    EXPECT_THROW(parser.add_option(option_value, sharg::config{.long_id = "hh"}), sharg::design_error);
     EXPECT_THROW(parser.add_option(option_value, sharg::config{.long_id = "advanced-help"}), sharg::design_error);
     EXPECT_THROW(parser.add_option(option_value, sharg::config{.long_id = "export-help"}), sharg::design_error);
+    EXPECT_THROW(parser.add_option(option_value, sharg::config{.long_id = "version"}), sharg::design_error);
+    EXPECT_THROW(parser.add_option(option_value, sharg::config{.long_id = "copyright"}), sharg::design_error);
 }
 
 TEST_F(verify_option_config_test, single_character_long_id)
