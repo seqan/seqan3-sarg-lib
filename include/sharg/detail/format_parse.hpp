@@ -13,6 +13,7 @@
 
 #include <sharg/concept.hpp>
 #include <sharg/detail/format_base.hpp>
+#include <sharg/detail/id_pair.hpp>
 
 namespace sharg::detail
 {
@@ -142,10 +143,10 @@ public:
     template <typename id_type>
     static bool is_empty_id(id_type const & id)
     {
-        if constexpr (std::same_as<std::remove_cvref_t<id_type>, std::string>)
-            return id.empty();
-        else // char
+        if constexpr (std::same_as<id_type, char>)
             return id == '\0';
+        else
+            return id.empty();
     }
 
     /*!\brief Finds the position of a short/long identifier in format_parse::arguments.
@@ -169,32 +170,39 @@ public:
      * The `id` is found by comparing every argument in arguments to `id` prepended with two dashes (`--`)
      * or a prefix of such followed by the equal sign `=`.
      */
-    template <typename iterator_type, typename id_type>
-    static iterator_type find_option_id(iterator_type begin_it, iterator_type end_it, id_type const & id)
+    template <typename iterator_type>
+    static iterator_type find_option_id(iterator_type begin_it, iterator_type end_it, detail::id_pair const & id)
     {
-        if (is_empty_id(id))
+        bool const short_id_empty{id.empty_short_id()};
+        bool const long_id_empty{id.empty_long_id()};
+
+        if (short_id_empty && long_id_empty)
             return end_it;
 
-        return (std::find_if(begin_it,
-                             end_it,
-                             [&](std::string const & current_arg)
-                             {
-                                 std::string full_id = prepend_dash(id);
+        std::string const short_id = prepend_dash(id.short_id);
+        std::string const long_id_equals = prepend_dash(id.long_id) + "=";
+        std::string_view const long_id_space = [&long_id_equals]()
+        {
+            std::string_view tmp{long_id_equals};
+            tmp.remove_suffix(1u);
+            return tmp;
+        }();
 
-                                 if constexpr (std::same_as<id_type, char>) // short id
-                                 {
-                                     // check if current_arg starts with "-o", i.e. it correctly identifies all short notations:
-                                     // "-ovalue", "-o=value", and "-o value".
-                                     return current_arg.substr(0, full_id.size()) == full_id;
-                                 }
-                                 else
-                                 {
-                                     // only "--opt Value" or "--opt=Value" are valid
-                                     return current_arg.substr(0, full_id.size()) == full_id && // prefix is the same
-                                            (current_arg.size() == full_id.size()
-                                             || current_arg[full_id.size()] == '='); // space or `=`
-                                 }
-                             }));
+        auto cmp = [&](std::string_view const current_arg)
+        {
+            // check if current_arg starts with "-o", i.e. it correctly identifies all short notations:
+            // "-ovalue", "-o=value", and "-o value".
+            if (!short_id_empty && current_arg.starts_with(short_id))
+                return true;
+
+            // only "--opt Value" or "--opt=Value" are valid
+            if (!long_id_empty && (current_arg == long_id_space || current_arg.starts_with(long_id_equals)))
+                return true;
+
+            return false;
+        };
+
+        return std::find_if(begin_it, end_it, cmp);
     }
 
 private:

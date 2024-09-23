@@ -493,26 +493,22 @@ public:
         if (!parse_was_called)
             throw design_error{"You can only ask which options have been set after calling the function `parse()`."};
 
-        // the detail::format_parse::find_option_id call in the end expects either a char or std::string
-        using char_or_string_t = std::conditional_t<std::same_as<id_type, char>, char, std::string>;
-        char_or_string_t short_or_long_id = {id}; // e.g. convert char * to string here if necessary
+        detail::id_pair const id_pair{id};
 
-        if constexpr (!std::same_as<id_type, char>) // long id was given
+        if (id_pair.long_id.size() == 1u)
         {
-            if (short_or_long_id.size() == 1)
-            {
-                throw design_error{"Long option identifiers must be longer than one character! If " + short_or_long_id
-                                   + "' was meant to be a short identifier, please pass it as a char ('') not a string"
-                                     " (\"\")!"};
-            }
+            throw design_error{"Long option identifiers must be longer than one character! If " + id_pair.long_id
+                               + "' was meant to be a short identifier, please pass it as a char ('') not a string"
+                                 " (\"\")!"};
         }
 
-        if (!used_ids.contains(std::string{id}))
+        auto const it = detail::id_pair::find(used_option_ids, id_pair);
+        if (it == used_option_ids.end())
             throw design_error{"You can only ask for option identifiers that you added with add_option() before."};
 
         // we only need to search for an option before the `option_end_identifier` (`--`)
-        auto option_end = std::find(format_arguments.begin(), format_arguments.end(), option_end_identifier);
-        auto option_it = detail::format_parse::find_option_id(format_arguments.begin(), option_end, short_or_long_id);
+        auto option_end = std::ranges::find(format_arguments, option_end_identifier);
+        auto option_it = detail::format_parse::find_option_id(format_arguments.begin(), option_end, *it);
         return option_it != option_end;
     }
 
@@ -760,8 +756,13 @@ private:
                  detail::format_copyright>
         format{detail::format_short_help{}};
 
-    //!\brief List of option/flag identifiers (excluding -/--) that are already used.
-    std::unordered_set<std::string> used_ids{"h", "hh", "help", "advanced-help", "export-help", "version", "copyright"};
+    //!\brief List of option/flag identifiers that are already used.
+    std::unordered_set<detail::id_pair> used_option_ids{{'h', "help"},
+                                                        {'\0' /*hh*/, "advanced-help"},
+                                                        {'\0', "hh"},
+                                                        {'\0', "export-help"},
+                                                        {'\0', "version"},
+                                                        {'\0', "copyright"}};
 
     //!\brief The command line arguments that will be passed to the format.
     std::vector<std::string> format_arguments{};
@@ -963,19 +964,6 @@ private:
             format = detail::format_parse(format_arguments);
     }
 
-    /*!\brief Checks whether the long identifier has already been used before.
-    * \param[in] id The long identifier of the command line option/flag.
-    * \returns `true` if an option or flag with the long identifier exists or `false`
-    *          otherwise.
-    */
-    template <typename id_type>
-    bool id_exists(id_type const & id)
-    {
-        if (detail::format_parse::is_empty_id(id))
-            return false;
-        return (!(used_ids.insert(std::string({id}))).second);
-    }
-
     /*!\brief Verifies that the short and the long identifiers are correctly formatted.
      * \param[in] short_id The short identifier of the command line option/flag.
      * \param[in] long_id  The long identifier of the command line option/flag.
@@ -1000,7 +988,7 @@ private:
         {
             if (short_id == '-' || !is_valid(short_id))
                 throw design_error{"Short identifiers may only contain alphanumeric characters, '_', or '@'."};
-            if (id_exists(short_id))
+            if (detail::id_pair::contains(used_option_ids, short_id))
                 throw design_error{"Short identifier '" + std::string(1, short_id) + "' was already used before."};
         }
 
@@ -1012,9 +1000,11 @@ private:
                 throw design_error{"Long identifiers may not use '-' as first character."};
             if (!std::ranges::all_of(long_id, is_valid))
                 throw design_error{"Long identifiers may only contain alphanumeric characters, '_', '-', or '@'."};
-            if (id_exists(long_id))
+            if (detail::id_pair::contains(used_option_ids, long_id))
                 throw design_error{"Long identifier '" + long_id + "' was already used before."};
         }
+
+        used_option_ids.emplace(short_id, long_id);
     }
 
     //!brief Verify the configuration given to a sharg::parser::add_option call.

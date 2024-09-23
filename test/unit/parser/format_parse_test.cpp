@@ -732,8 +732,12 @@ TEST_F(format_parse_test, issue1544)
 TEST_F(format_parse_test, is_option_set)
 {
     std::string option_value{};
+    std::vector<std::string> positional_options{};
 
-    auto parser = get_parser("-l", "hallo", "--foobar", "ballo", "--");
+    auto parser = get_parser("-l", "hallo", "--foobar", "ballo", "--", "--loo", "--bar");
+    // `--` signals the end of options!
+    parser.add_positional_option(positional_options, sharg::config{});
+    parser.add_option(option_value, sharg::config{.short_id = 'b', .long_id = "bar"});
     parser.add_option(option_value, sharg::config{.short_id = 'l', .long_id = "loo"});
     parser.add_option(option_value, sharg::config{.short_id = 'f', .long_id = "foobar"});
 
@@ -741,30 +745,30 @@ TEST_F(format_parse_test, is_option_set)
     EXPECT_THROW(parser.is_option_set("foo"), sharg::design_error);
 
     EXPECT_NO_THROW(parser.parse());
+    EXPECT_EQ(positional_options.size(), 2u);
+    EXPECT_EQ(positional_options[0], "--loo");
+    EXPECT_EQ(positional_options[1], "--bar");
 
     EXPECT_TRUE(parser.is_option_set('l'));
+    EXPECT_TRUE(parser.is_option_set("loo")); // --loo is behind the `--`, but -l is before
+    EXPECT_TRUE(parser.is_option_set('f'));
     EXPECT_TRUE(parser.is_option_set("foobar"));
 
-    EXPECT_FALSE(parser.is_option_set('f'));
-    EXPECT_FALSE(parser.is_option_set("loo"));
+    EXPECT_FALSE(parser.is_option_set('b'));
+    EXPECT_FALSE(parser.is_option_set("bar")); // --bar is behind the `--`
 
     // errors:
-    auto expect_design_error = [&](auto && option)
-    {
-        EXPECT_THROW(parser.is_option_set(option), sharg::design_error);
-    };
+    EXPECT_THROW(parser.is_option_set("l"), sharg::design_error); // short identifiers are passed as chars not strings
+    EXPECT_THROW(parser.is_option_set("f"), sharg::design_error); // short identifiers are passed as chars not strings
 
-    expect_design_error("l"); // short identifiers are passed as chars not strings
-    expect_design_error("f"); // short identifiers are passed as chars not strings
+    EXPECT_THROW(parser.is_option_set("foo"), sharg::design_error);
+    EXPECT_THROW(parser.is_option_set("--"), sharg::design_error);
+    EXPECT_THROW(parser.is_option_set(""), sharg::design_error);
 
-    expect_design_error("foo");
-    expect_design_error("--");
-    expect_design_error("");
-
-    expect_design_error('!');
-    expect_design_error('-');
-    expect_design_error('_');
-    expect_design_error('\0');
+    EXPECT_THROW(parser.is_option_set('!'), sharg::design_error);
+    EXPECT_THROW(parser.is_option_set('-'), sharg::design_error);
+    EXPECT_THROW(parser.is_option_set('_'), sharg::design_error);
+    EXPECT_THROW(parser.is_option_set('\0'), sharg::design_error);
 }
 
 // https://github.com/seqan/seqan3/issues/2835
