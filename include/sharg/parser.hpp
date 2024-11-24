@@ -18,6 +18,7 @@
 #include <sharg/detail/format_man.hpp>
 #include <sharg/detail/format_parse.hpp>
 #include <sharg/detail/format_tdl.hpp>
+#include <sharg/detail/poison_config.hpp>
 #include <sharg/detail/version_check.hpp>
 
 namespace sharg
@@ -256,6 +257,15 @@ public:
         operations.push_back(std::move(operation));
     }
 
+    //!\cond DEV
+    //!\brief A poison overload that catches calls to add_option without explicitly passing a sharg::config.
+    template <typename option_type>
+    void add_option(option_type &, detail::poison_config const &)
+    {
+        static_assert(detail::dependent_false_v<option_type>, "Forgot sharg::config?");
+    }
+    //!\endcond
+
     /*!\brief Adds a flag to the sharg::parser.
      *
      * \param[in, out] value     The variable which shows if the flag is turned off (default) or on.
@@ -291,6 +301,15 @@ public:
 
         operations.push_back(std::move(operation));
     }
+
+    //!\cond DEV
+    //!\brief A poison overload that catches calls to add_flag without explicitly passing a sharg::config.
+    template <typename option_type> // Template needed to prevent instantiation of this function if unused.
+    void add_flag(option_type &, detail::poison_config const &)
+    {
+        static_assert(detail::dependent_false_v<option_type>, "Forgot sharg::config?");
+    }
+    //!\endcond
 
     /*!\brief Adds a positional option to the sharg::parser.
      *
@@ -342,6 +361,16 @@ public:
 
         operations.push_back(std::move(operation));
     }
+
+    //!\cond DEV
+    //!\brief A poison overload that catches calls to add_positional_option without explicitly passing a sharg::config.
+    template <typename option_type>
+    void add_positional_option(option_type &, detail::poison_config const &)
+    {
+        static_assert(detail::dependent_false_v<option_type>, "Forgot sharg::config?");
+    }
+    //!\endcond
+
     //!\}
 
     /*!\brief Initiates the actual command line parsing.
